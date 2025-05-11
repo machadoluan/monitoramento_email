@@ -1,0 +1,13 @@
+{
+  "positive": [
+    "BYPASS",
+    "MODO BATERIA",
+    "AC FAIL",
+    "BATERRY"
+  ],
+  "noise": [
+    "LIGOU NA TOMADA",
+    "TESTE DE ROTINA",
+    "INFORMAÇÃO"
+  ]
+}
