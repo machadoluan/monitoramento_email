@@ -1,10 +1,14 @@
 // src/keyword/keyword.module.ts
-import { Module, Global } from '@nestjs/common';
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Keyword } from './keyword.entity';
 import { KeywordService } from './keyword.service';
+import { KeywordController } from './keyword.controller';
 
-@Global()
 @Module({
+  imports: [ TypeOrmModule.forFeature([Keyword]) ],
   providers: [KeywordService],
+  controllers: [KeywordController],
   exports: [KeywordService],
 })
 export class KeywordModule {}

@@ -7,6 +7,8 @@ import fetch from 'node-fetch';
 import * as dotenv from 'dotenv';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { KeywordService } from '../keyword/keyword.service';
+import { AlertService } from 'src/alert/alert.service';
+import { AlertDto } from 'src/alert/dto/alert.dto';
 
 dotenv.config();
 
@@ -14,8 +16,10 @@ dotenv.config();
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   constructor(
-    private readonly kw: KeywordService,    // <- injeção
+    private readonly kw: KeywordService,
+    private readonly alertService: AlertService,
   ) { }
+
   private processing = false;
 
   private readonly imapConfig = {
@@ -30,35 +34,42 @@ export class EmailService {
     },
   };
 
-  private async enviarTelegram(text: string) {
-    const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
-    const res = await fetch(url, {
+  private async enviarTelegramComOuSemCorpo(dto: AlertDto, id: string) {
+    const msgText = [
+      `⚠️ *Alerta de No-break*`,
+      `🖥️ *Aviso:* ${dto.aviso}`,
+      `⏰ *Data/Hora:* ${dto.dataHora}`,
+      `🌐 *IP:* ${dto.ip}`,
+      `🖥️ *Sistema:* ${dto.nomeSistema}`,
+      `📞 *Contato:* ${dto.contato}`,
+      `📍 *Localidade:* ${dto.localidade}`,
+      `❗️ *Status:* ${dto.status}`,
+    ].join('\n');
+
+    await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: process.env.TELEGRAM_CHAT_ID,
-        text,
+        text: msgText,
         parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [[{ text: '📨 Ver corpo do e-mail', callback_data: `ver_corpo::${id}` }]],
+        },
       }),
     });
-    const json = await res.json();
-    if (!json.ok) {
-      this.logger.error('❌ Falha ao enviar Telegram:', json.description);
-    }
   }
 
   private async fetchAndProcess() {
     const connection = await Imap.connect(this.imapConfig);
     await connection.openBox('INBOX');
 
-    // Busca apenas e-mails não lidos e já marca como lido
     const messages = await connection.search(
       [['UNSEEN']],
-      { bodies: [''], struct: true, markSeen: true }
+      { bodies: [''], struct: true, markSeen: true },
     );
 
     for (const msg of messages) {
-      // 'which' === '' indica o raw completo
       const part = msg.parts.find(p => p.which === '');
       if (!part) continue;
 
@@ -68,8 +79,6 @@ export class EmailService {
 
       const parsed: ParsedMail = await simpleParser(raw);
 
-
-      // Extrai assunto, remetente e data
       const assunto = parsed.subject?.trim() || '(sem assunto)';
       const remetente = parsed.from?.value?.[0]?.address || '(sem remetente)';
       const dataHora = parsed.date
@@ -82,39 +91,36 @@ export class EmailService {
         .map(l => l.trim())
         .filter(l => l.includes(':'));
 
-
       const fields: Record<string, string> = {};
       for (const line of lines) {
         const [key, ...rest] = line.split(':');
         fields[key.trim()] = rest.join(':').trim();
       }
 
-      const sistema = fields['Nome Sistema'] || parsed.subject?.trim() || '(sem sistema)';
-
-
-      // Extrai corpo limpo
       const corpoTexto = (parsed.text || parsed.html || '')
-        .replace(/<[^>]*>/g, '')      // remove tags HTML
-        .replace(/\s+/g, ' ')         // normalize whitespace
+        .replace(/<[^>]*>/g, '')
+        .replace(/\s+/g, ' ')
         .trim();
 
-      this.logger.log(`📌 ${assunto} — ${remetente} — ${dataHora}`);
-      this.logger.log(`📄 ${corpoTexto.slice(0, 100)}…`);
-
-      // Filtros de relevância
       const U = (assunto + ' ' + corpoTexto).toUpperCase();
-      const palavrasChave = this.kw.getPositive();
+      const palavrasChave = await this.kw.getAll();
       const relevante = palavrasChave.some(k => U.includes(k));
 
-      if (relevante) {
-        const msgText = [
-          `⚠️ *Alerta de No-break*`,
-          `🖥️ *Aviso:* ${assunto}`,
-          `📄 *Mensagem:* ${corpoTexto}`
-        ].join('\n');
+      const dto: AlertDto = {
+        time: dataHora,
+        aviso: assunto,
+        dataHora: fields['Data/Hora'] || '(sem data)',
+        ip: fields['IP'] || '(sem IP)',
+        nomeSistema: fields['Nome Sistema'] || '(sem nome)',
+        contato: fields['Contato Sistema'] || '(sem contato)',
+        localidade: fields['Localidade Sistema'] || '(sem localidade)',
+        status: fields['Status'] || '(sem status)',
+        mensagemOriginal: corpoTexto,
+      };
 
-        this.logger.warn(msgText.replace(/\*/g, ''));
-        await this.enviarTelegram(msgText);
+      if (relevante) {
+        const saved = await this.alertService.create(dto);
+        await this.enviarTelegramComOuSemCorpo(dto, saved.id);
       } else {
         this.logger.log(`🗑️ Ignorado: ${assunto}`);
       }
