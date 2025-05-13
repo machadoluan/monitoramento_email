@@ -5,6 +5,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import fetch from 'node-fetch';
 import { KeywordService } from '../keyword/keyword.service';
 import { AlertService } from '../alert/alert.service';
+import { EmailRegistryService } from 'src/email/email-registry.service';
 
 @Injectable()
 export class TelegramCommandService {
@@ -14,7 +15,8 @@ export class TelegramCommandService {
   constructor(
     private readonly kw: KeywordService,
     private readonly alertService: AlertService,
-  ) {}
+    private readonly registry: EmailRegistryService
+  ) { }
 
   @Cron(CronExpression.EVERY_5_SECONDS)
   async pollCommands() {
@@ -56,7 +58,9 @@ export class TelegramCommandService {
   }
 
   private async handle(chatId: number, text: string) {
-    const [cmd, ...args] = text.trim().split(/\s+/);
+    const match = text.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
+    const [cmd, ...args] = match.map(t => t.replace(/(^"|"$)/g, ''));
+
     const word = args.join(' ').trim();
     let resp: string;
 
@@ -99,11 +103,91 @@ export class TelegramCommandService {
           }
           break;
 
+        case '/addemail':
+          const [email, senha, chatIdArg] = args;
+          if (!email || !senha || !chatIdArg) {
+            resp = `❗ Uso: /addemail <email> <senha> <chatId>`;
+          } else {
+            await this.registry.add({
+              email,
+              senha: senha,
+              chatId: chatIdArg,
+            });
+            resp = `✅ E-mail *${email}* vinculado ao chat *${chatIdArg}* com sucesso.`;
+          }
+          break;
+
+
+        case '/listemails':
+          {
+            const all = await this.registry.findByChat(chatId.toString());
+            if (!all.length) {
+              resp = `⚠️ Nenhum e-mail registrado para este grupo.`;
+            } else {
+              resp = `📬 *E-mails registrados:*\n` + all.map(r => `• ${r.email}`).join('\n');
+            }
+          }
+          break;
+
+        case '/removeemail':
+          {
+            const [emailToRemove] = args;
+            if (!emailToRemove) {
+              resp = `❗ Uso: /removeemail <email>`;
+              break;
+            }
+            const deleted = await this.registry.remove(emailToRemove, chatId.toString());
+            resp = deleted
+              ? `🗑️ E-mail *${emailToRemove}* removido com sucesso.`
+              : `⚠️ Não encontrei o e-mail ou ele não pertence a este chat.`;
+          }
+          break;
+
+        case '/editsenha':
+          {
+            const [emailEdit, novaSenha] = args;
+            if (!emailEdit || !novaSenha) {
+              resp = `❗ Uso: /editsenha <email> <novasenha>`;
+              break;
+            }
+            const updated = await this.registry.updatePassword(emailEdit, novaSenha);
+            resp = updated
+              ? `✅ Senha de *${emailEdit}* atualizada com sucesso.`
+              : `⚠️ E-mail não encontrado.`;
+          }
+          break;
+
+        case '/setgrupo':
+          {
+            const [emailEdit, novoChatId] = args;
+            if (!emailEdit || !novoChatId) {
+              resp = `❗ Uso: /setgrupo <email> <chatId>`;
+              break;
+            }
+            const updated = await this.registry.updateChat(emailEdit, novoChatId);
+            resp = updated
+              ? `✅ E-mail *${emailEdit}* agora envia alertas para o chat *${novoChatId}*.`
+              : `⚠️ E-mail não encontrado.`;
+          }
+          break;
+
+
         default:
-          resp = `Comando não reconhecido. Use:\n` +
-                 `/addtag <palavra>\n` +
-                 `/removetag <palavra>\n` +
-                 `/vertags`;
+          resp =
+            `🤖 *Comandos disponíveis:*\n\n` +
+
+            `📌 *Palavras-chave:*\n` +
+            `➕ /addtag <palavra> — adicionar palavra-chave\n` +
+            `➖ /removetag <palavra> — remover palavra-chave\n` +
+            `📃 /vertags — listar palavras-chave\n\n` +
+
+            `📬 *E-mails monitorados:*\n` +
+            `📥 /addemail <email> <senha> <chatId> — adicionar e-mail\n` +
+            `📜 /listemails — listar e-mails cadastrados\n` +
+            `🗑️ /removeemail <email> — remover e-mail\n` +
+            `🔐 /editsenha <email> <novasenha> — alterar senha\n` +
+            `📲 /setgrupo <email> <chatId> — mudar grupo destino dos alertas`;
+
       }
     } catch (err) {
       this.logger.error('Erro ao tratar comando:', err);
@@ -120,4 +204,5 @@ export class TelegramCommandService {
       }),
     });
   }
+
 }

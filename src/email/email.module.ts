@@ -8,20 +8,21 @@ import { AlertEntity } from 'src/alert/alert.entity';
 // importe os módulos que providenciam os serviços
 import { KeywordModule } from 'src/keyword/keyword.module';
 import { AlertModule }   from 'src/alert/alert.module';
+import { EmailRegistryService } from './email-registry.service';
+import { EmailEntity } from './email.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([AlertEntity]),  // pra AlertService injetar repo
+    TypeOrmModule.forFeature([AlertEntity, EmailEntity]),  // pra AlertService injetar repo
     KeywordModule,                            // ← fornece KeywordService
     AlertModule,                              // ← fornece AlertService
   ],
   providers: [
     EmailService,
-    // não precisa mais listar AlertService manualmente,
-    // pois ele vem de AlertModule
+    EmailRegistryService
   ],
   controllers: [EmailController],
-  exports: [EmailService],
+  exports: [EmailService, EmailRegistryService],
 })
 export class EmailModule {}
     

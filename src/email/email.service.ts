@@ -9,6 +9,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { KeywordService } from '../keyword/keyword.service';
 import { AlertService } from 'src/alert/alert.service';
 import { AlertDto } from 'src/alert/dto/alert.dto';
+import { EmailRegistryService } from './email-registry.service';
 
 dotenv.config();
 
@@ -18,23 +19,25 @@ export class EmailService {
   constructor(
     private readonly kw: KeywordService,
     private readonly alertService: AlertService,
+    private readonly emailRegistryService: EmailRegistryService
   ) { }
 
   private processing = false;
 
-  private readonly imapConfig = {
-    imap: {
-      user: process.env.IMAP_EMAIL,
-      password: process.env.IMAP_PASSWORD,
-      host: 'imap.gmail.com',
-      port: 993,
-      tls: true,
-      tlsOptions: { rejectUnauthorized: false },
-      authTimeout: 5000,
-    },
-  };
+  // private readonly imapConfig = {
+  //   imap: {
+  //     user: process.env.IMAP_EMAIL,
+  //     password: process.env.IMAP_PASSWORD,
+  //     host: process.env.IMAP_HOST,       // imap.kinghost.net
+  //     port: Number(process.env.IMAP_PORT), // 993
+  //     tls: process.env.IMAP_TLS === 'true',
+  //     tlsOptions: { rejectUnauthorized: false },
+  //     authTimeout: 5000,
+  //   },
+  // };
 
-  private async enviarTelegramComOuSemCorpo(dto: AlertDto, id: string) {
+
+  private async enviarTelegramComOuSemCorpo(dto: AlertDto, id: string, chatId: string) {
     const msgText = [
       `⚠️ *Alerta de No-break*`,
       `🖥️ *Aviso:* ${dto.aviso}`,
@@ -50,7 +53,7 @@ export class EmailService {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        chat_id: process.env.TELEGRAM_CHAT_ID,
+        chat_id: chatId,
         text: msgText,
         parse_mode: 'Markdown',
         reply_markup: {
@@ -61,72 +64,92 @@ export class EmailService {
   }
 
   private async fetchAndProcess() {
-    const connection = await Imap.connect(this.imapConfig);
-    await connection.openBox('INBOX');
+    const registros = await this.emailRegistryService.list();
 
-    const messages = await connection.search(
-      [['UNSEEN']],
-      { bodies: [''], struct: true, markSeen: true },
-    );
+    for (const reg of registros) {
+      const host = reg.email.includes('@gmail.com')
+        ? 'imap.gmail.com'
+        : 'imap.kinghost.net';
 
-    for (const msg of messages) {
-      const part = msg.parts.find(p => p.which === '');
-      if (!part) continue;
+      const connection = await Imap.connect({
+        imap: {
+          user: reg.email,
+          password: reg.senha,
+          host,
+          port: 993,
+          tls: true,
+          tlsOptions: { rejectUnauthorized: false },
+        },
+      });
 
-      const raw = Buffer.isBuffer(part.body)
-        ? part.body
-        : Buffer.from(part.body as string, 'utf-8');
 
-      const parsed: ParsedMail = await simpleParser(raw);
+      await connection.openBox('INBOX');
 
-      const assunto = parsed.subject?.trim() || '(sem assunto)';
-      const remetente = parsed.from?.value?.[0]?.address || '(sem remetente)';
-      const dataHora = parsed.date
-        ? parsed.date.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
-        : '(sem data)';
+      const messages = await connection.search(
+        [['UNSEEN']],
+        { bodies: [''], struct: true, markSeen: true },
+      );
 
-      const textBody = (parsed.text || '').trim();
-      const lines = textBody
-        .split(/\r?\n/)
-        .map(l => l.trim())
-        .filter(l => l.includes(':'));
+      for (const msg of messages) {
+        const part = msg.parts.find(p => p.which === '');
+        if (!part) continue;
 
-      const fields: Record<string, string> = {};
-      for (const line of lines) {
-        const [key, ...rest] = line.split(':');
-        fields[key.trim()] = rest.join(':').trim();
+        const raw = Buffer.isBuffer(part.body)
+          ? part.body
+          : Buffer.from(part.body as string, 'utf-8');
+
+        const parsed: ParsedMail = await simpleParser(raw);
+
+        const assunto = parsed.subject?.trim() || '(sem assunto)';
+        const remetente = parsed.from?.value?.[0]?.address || '(sem remetente)';
+        const dataHora = parsed.date
+          ? parsed.date.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+          : '(sem data)';
+
+        const textBody = (parsed.text || '').trim();
+        const lines = textBody
+          .split(/\r?\n/)
+          .map(l => l.trim())
+          .filter(l => l.includes(':'));
+
+        const fields: Record<string, string> = {};
+        for (const line of lines) {
+          const [key, ...rest] = line.split(':');
+          fields[key.trim()] = rest.join(':').trim();
+        }
+
+        const corpoTexto = (parsed.text || parsed.html || '')
+          .replace(/<[^>]*>/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        const U = (assunto + ' ' + corpoTexto).toUpperCase();
+        const palavrasChave = await this.kw.getAll();
+        const relevante = palavrasChave.some(k => U.includes(k));
+
+        const dto: AlertDto = {
+          time: dataHora,
+          aviso: assunto,
+          dataHora: fields['Data/Hora'] || '(sem data)',
+          ip: fields['IP'] || '(sem IP)',
+          nomeSistema: fields['Nome Sistema'] || '(sem nome)',
+          contato: fields['Contato Sistema'] || '(sem contato)',
+          localidade: fields['Localidade Sistema'] || '(sem localidade)',
+          status: fields['Status'] || '(sem status)',
+          mensagemOriginal: corpoTexto,
+        };
+
+        if (relevante) {
+          const saved = await this.alertService.create(dto);
+          await this.enviarTelegramComOuSemCorpo(dto, saved.id, reg.chatId);
+          await this.notificarAlexa(dto.contato, dto.status);
+        } else {
+          this.logger.log(`🗑️ Ignorado: ${assunto}`);
+        }
       }
 
-      const corpoTexto = (parsed.text || parsed.html || '')
-        .replace(/<[^>]*>/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      const U = (assunto + ' ' + corpoTexto).toUpperCase();
-      const palavrasChave = await this.kw.getAll();
-      const relevante = palavrasChave.some(k => U.includes(k));
-
-      const dto: AlertDto = {
-        time: dataHora,
-        aviso: assunto,
-        dataHora: fields['Data/Hora'] || '(sem data)',
-        ip: fields['IP'] || '(sem IP)',
-        nomeSistema: fields['Nome Sistema'] || '(sem nome)',
-        contato: fields['Contato Sistema'] || '(sem contato)',
-        localidade: fields['Localidade Sistema'] || '(sem localidade)',
-        status: fields['Status'] || '(sem status)',
-        mensagemOriginal: corpoTexto,
-      };
-
-      if (relevante) {
-        const saved = await this.alertService.create(dto);
-        await this.enviarTelegramComOuSemCorpo(dto, saved.id);
-      } else {
-        this.logger.log(`🗑️ Ignorado: ${assunto}`);
-      }
+      await connection.end();
     }
-
-    await connection.end();
   }
 
   @Cron(CronExpression.EVERY_5_SECONDS)
@@ -139,5 +162,17 @@ export class EmailService {
     } finally {
       this.processing = false;
     }
+  }
+
+  private async notificarAlexa(contato: string, status: string) {
+    const url = `https://maker.ifttt.com/trigger/alerta_no_break/with/key/${process.env.IFTTT_KEY}`;
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        value1: contato,
+        value2: status,
+      }),
+    });
   }
 }

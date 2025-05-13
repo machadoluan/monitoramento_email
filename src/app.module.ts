@@ -13,6 +13,7 @@ import { KeywordModule } from './keyword/keyword.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AlertEntity } from './alert/alert.entity';
 import { Keyword } from './keyword/keyword.entity';
+import { EmailEntity } from './email/email.entity';
 
 @Module({
   imports: [
@@ -25,7 +26,7 @@ import { Keyword } from './keyword/keyword.entity';
         username: configService.get<string>('DATABASE_USER'),
         password: 'Machado@Luan121107#',
         database: configService.get<string>('DATABASE_NAME'),
-        entities: [AlertEntity, Keyword],
+        entities: [AlertEntity, Keyword, EmailEntity],
         autoLoadEntities: true,
         synchronize: true,
       }),
