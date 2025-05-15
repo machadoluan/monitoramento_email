@@ -42,19 +42,18 @@ export class EmailService {
 
   private async enviarTelegramComOuSemCorpo(dto: AlertDto, id: string, chatId: string) {
     const msgText = this.escapeMarkdown([
-      `⚠️ *Alerta de No-break*`,
-      `🖥️ *Aviso:* ${dto.aviso}`,
-      `⏰ *Data/Hora:* ${dto.dataHora}`,
-      `🖥️ *Sistema:* ${dto.nomeSistema}`,
-      `📞 *Contato:* ${dto.contato}`,
-      `📍 *Localidade:* ${dto.localidade}`,
-      `❗️ *Status:* ${dto.status}`,
+      `⚠️ Alerta de No-break`,
+      `🖥️ Aviso: ${dto.aviso}`,
+      `⏰ Data/Hora: ${dto.dataHora}`,
+      `🖥️ Sistema: ${dto.nomeSistema}`,
+      `📞 Contato: ${dto.contato}`,
+      `📍 Localidade: ${dto.localidade}`,
+      `❗️ Status: ${dto.status}`,
     ].join('\n'));
   
     const payload = {
       chat_id: chatId,
       text: msgText,
-      parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [[{ text: '📨 Ver corpo do e-mail', callback_data: `ver_corpo::${id}` }]],
       },
