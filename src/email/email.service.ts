@@ -52,18 +52,18 @@ export class EmailService {
   
     // extrai só dígitos do contato
     const tel = dto.contato.replace(/\D/g, '');
+    
     const keyboard: any[][] = [
-      // sempre mostro primeiro o botão de ver corpo
       [{ text: '📨 Ver corpo do e-mail', callback_data: `ver_corpo::${id}` }]
     ];
-  
-    // se tiver um telefone válido (>=8 dígitos), adiciona a linha de contato
+
     if (tel.length >= 8) {
       const waText = encodeURIComponent(
         `Recebemos um alerta de ${dto.aviso}, está tudo bem?`
       );
       keyboard.push([
-        { text: '📞 Ligar',    url: `tel:${tel}` },
+        // botão de chamada vira callback_data
+        { text: '📞 Ligar',    callback_data: `ligar:${tel}` },
         { text: '💬 WhatsApp', url: `https://api.whatsapp.com/send?phone=${tel}&text=${waText}` }
       ]);
     }
