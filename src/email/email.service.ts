@@ -50,12 +50,29 @@ export class EmailService {
       `❗️ Status: ${dto.status}`,
     ].join('\n');
   
+    // extrai só dígitos do contato
+    const tel = dto.contato.replace(/\D/g, '');
+    const keyboard: any[][] = [
+      // sempre mostro primeiro o botão de ver corpo
+      [{ text: '📨 Ver corpo do e-mail', callback_data: `ver_corpo::${id}` }]
+    ];
+  
+    // se tiver um telefone válido (>=8 dígitos), adiciona a linha de contato
+    if (tel.length >= 8) {
+      const waText = encodeURIComponent(
+        `Recebemos um alerta de ${dto.aviso}, está tudo bem?`
+      );
+      keyboard.push([
+        { text: '📞 Ligar',    url: `tel:${tel}` },
+        { text: '💬 WhatsApp', url: `https://api.whatsapp.com/send?phone=${tel}&text=${waText}` }
+      ]);
+    }
+  
     const payload = {
       chat_id: chatId,
       text: msgText,
-      // ❌ NÃO INCLUA parse_mode
       reply_markup: {
-        inline_keyboard: [[{ text: '📨 Ver corpo do e-mail', callback_data: `ver_corpo::${id}` }]],
+        inline_keyboard: keyboard
       },
     };
   
@@ -63,14 +80,15 @@ export class EmailService {
     this.logger.debug(`📦 Payload: ${JSON.stringify(payload, null, 2)}`);
   
     try {
-      const res = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-  
+      const res = await fetch(
+        `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      );
       const data = await res.json();
-  
       if (!res.ok) {
         this.logger.error(`❌ Erro ao enviar para Telegram: ${res.status} - ${res.statusText}`);
         this.logger.error(`📨 Resposta do Telegram: ${JSON.stringify(data, null, 2)}`);
@@ -81,6 +99,7 @@ export class EmailService {
       this.logger.error(`💥 Exceção ao enviar mensagem para Telegram: ${err.message}`);
     }
   }
+  
   
   
 
