@@ -47,20 +47,39 @@ export class EmailService {
       `📍 *Localidade:* ${dto.localidade}`,
       `❗️ *Status:* ${dto.status}`,
     ].join('\n');
-
-    await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: msgText,
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [[{ text: '📨 Ver corpo do e-mail', callback_data: `ver_corpo::${id}` }]],
-        },
-      }),
-    });
+  
+    const payload = {
+      chat_id: chatId,
+      text: msgText,
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [[{ text: '📨 Ver corpo do e-mail', callback_data: `ver_corpo::${id}` }]],
+      },
+    };
+  
+    this.logger.debug(`📤 Enviando mensagem para Telegram (chatId: ${chatId})`);
+    this.logger.debug(`📦 Payload: ${JSON.stringify(payload, null, 2)}`);
+  
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+  
+      const data = await res.json();
+  
+      if (!res.ok) {
+        this.logger.error(`❌ Erro no envio para o Telegram: ${res.status} - ${res.statusText}`);
+        this.logger.error(`📨 Resposta do Telegram: ${JSON.stringify(data, null, 2)}`);
+      } else {
+        this.logger.log(`✅ Mensagem enviada ao Telegram com sucesso (chatId: ${chatId})`);
+      }
+    } catch (err) {
+      this.logger.error(`💥 Exceção ao enviar mensagem para Telegram: ${err.message}`);
+    }
   }
+  
 
   private async fetchAndProcess() {
     const registros = await this.emailRegistryService.list();
