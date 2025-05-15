@@ -42,7 +42,6 @@ export class EmailService {
       `⚠️ *Alerta de No-break*`,
       `🖥️ *Aviso:* ${dto.aviso}`,
       `⏰ *Data/Hora:* ${dto.dataHora}`,
-      `🌐 *IP:* ${dto.ip}`,
       `🖥️ *Sistema:* ${dto.nomeSistema}`,
       `📞 *Contato:* ${dto.contato}`,
       `📍 *Localidade:* ${dto.localidade}`,
@@ -65,12 +64,12 @@ export class EmailService {
 
   private async fetchAndProcess() {
     const registros = await this.emailRegistryService.list();
-
+  
     for (const reg of registros) {
       const host = reg.email.includes('@gmail.com')
         ? 'imap.gmail.com'
         : 'imap.kinghost.net';
-
+  
       const connection = await Imap.connect({
         imap: {
           user: reg.email,
@@ -81,64 +80,93 @@ export class EmailService {
           tlsOptions: { rejectUnauthorized: false },
         },
       });
-
-
+  
       await connection.openBox('INBOX');
-
+  
       const messages = await connection.search(
         [['UNSEEN']],
         { bodies: [''], struct: true, markSeen: true },
       );
-
+  
       for (const msg of messages) {
         const part = msg.parts.find(p => p.which === '');
         if (!part) continue;
-
+  
         const raw = Buffer.isBuffer(part.body)
           ? part.body
           : Buffer.from(part.body as string, 'utf-8');
-
+  
         const parsed: ParsedMail = await simpleParser(raw);
-
+  
         const assunto = parsed.subject?.trim() || '(sem assunto)';
         const remetente = parsed.from?.value?.[0]?.address || '(sem remetente)';
         const dataHora = parsed.date
           ? parsed.date.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
           : '(sem data)';
-
-        const textBody = (parsed.text || '').trim();
-        const lines = textBody
-          .split(/\r?\n/)
-          .map(l => l.trim())
-          .filter(l => l.includes(':'));
-
+  
         const fields: Record<string, string> = {};
-        for (const line of lines) {
-          const [key, ...rest] = line.split(':');
-          fields[key.trim()] = rest.join(':').trim();
+  
+        // 🔍 Extração de texto
+        const plainText = (parsed.text || parsed.html || '').replace(/\r/g, '');
+        const lines = plainText.split('\n').map(l => l.trim()).filter(Boolean);
+  
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+  
+          // 1. Captura todos os "Chave: Valor" da linha
+          const matches = [...line.matchAll(/([\wÀ-ÿ \/]+):\s*([^\n:]+?)(?=(?:\s+\w+\s*:\s*)|$)/g)];
+          if (matches.length > 0) {
+            for (const [, rawKey, rawValue] of matches) {
+              const key = rawKey.trim();
+              const value = rawValue.trim();
+              fields[key] = value;
+            }
+          } else {
+            // 2. "Status:" seguido por valor na próxima linha
+            if (/^Status:?$/i.test(line) && i + 1 < lines.length) {
+              const nextLine = lines[i + 1].trim();
+              if (nextLine) {
+                fields['Status'] = nextLine;
+                i++;
+              }
+            }
+          }
         }
-
+  
+        // 3. Se ainda não encontrou nada, tenta HTML (tabela)
+        if (Object.keys(fields).length === 0 && parsed.html) {
+          const cheerio = await import('cheerio');
+          const $ = cheerio.load(parsed.html);
+  
+          $('table tr').each((_, row) => {
+            const key = $(row).find('td').eq(0).text().trim();
+            const value = $(row).find('td').eq(1).text().trim();
+            if (key) fields[key] = value;
+          });
+        }
+  
+        // ✂️ Limpeza do corpo para salvar no banco e exibir no Telegram
         const corpoTexto = (parsed.text || parsed.html || '')
           .replace(/<[^>]*>/g, '')
           .replace(/\s+/g, ' ')
           .trim();
-
+  
         const U = (assunto + ' ' + corpoTexto).toUpperCase();
         const palavrasChave = await this.kw.getAll();
         const relevante = palavrasChave.some(k => U.includes(k));
-
+  
         const dto: AlertDto = {
           time: dataHora,
           aviso: assunto,
-          dataHora: fields['Data/Hora'] || '(sem data)',
+          dataHora: fields['Data/Hora'] || fields['Date/Time'] || fields['Date'] || '(sem data)',
           ip: fields['IP'] || '(sem IP)',
-          nomeSistema: fields['Nome Sistema'] || '(sem nome)',
-          contato: fields['Contato Sistema'] || '(sem contato)',
-          localidade: fields['Localidade Sistema'] || '(sem localidade)',
-          status: fields['Status'] || '(sem status)',
+          nomeSistema: fields['Nome Sistema'] || fields['System Name'] || fields['Name'] || '(sem nome)',
+          contato: fields['Contato Sistema'] || fields['System Contact'] || fields['Contact'] || '(sem contato)',
+          localidade: fields['Localidade Sistema'] || fields['System Location'] || fields['Location'] || '(sem localidade)',
+          status: fields['Status'] || fields['Code'] || '(sem status)',
           mensagemOriginal: corpoTexto,
         };
-
+  
         if (relevante) {
           const saved = await this.alertService.create(dto);
           await this.enviarTelegramComOuSemCorpo(dto, saved.id, reg.chatId);
@@ -147,10 +175,11 @@ export class EmailService {
           this.logger.log(`🗑️ Ignorado: ${assunto}`);
         }
       }
-
+  
       await connection.end();
     }
   }
+  
 
   @Cron(CronExpression.EVERY_5_SECONDS)
   async verificarPeriodicamente() {
