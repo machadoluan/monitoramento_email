@@ -10,6 +10,7 @@ import { KeywordService } from '../keyword/keyword.service';
 import { AlertService } from 'src/alert/alert.service';
 import { AlertDto } from 'src/alert/dto/alert.dto';
 import { EmailRegistryService } from './email-registry.service';
+import * as cheerio from 'cheerio';
 
 dotenv.config();
 
@@ -125,46 +126,33 @@ export class EmailService {
           ? parsed.date.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
           : '(sem data)';
   
-        const fields: Record<string, string> = {};
-  
-        // 🔍 Extração de texto
-        const plainText = (parsed.text || parsed.html || '').replace(/\r/g, '');
-        const lines = plainText.split('\n').map(l => l.trim()).filter(Boolean);
-  
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-  
-          // 1. Captura todos os "Chave: Valor" da linha
-          const matches = [...line.matchAll(/([\wÀ-ÿ \/]+):\s*([^\n:]+?)(?=(?:\s+\w+\s*:\s*)|$)/g)];
-          if (matches.length > 0) {
-            for (const [, rawKey, rawValue] of matches) {
-              const key = rawKey.trim();
-              const value = rawValue.trim();
-              fields[key] = value;
-            }
-          } else {
-            // 2. "Status:" seguido por valor na próxima linha
-            if (/^Status:?$/i.test(line) && i + 1 < lines.length) {
-              const nextLine = lines[i + 1].trim();
-              if (nextLine) {
-                fields['Status'] = nextLine;
-                i++;
+          const fields: Record<string,string> = {};
+
+          // 1) Sempre tente extrair da tabela HTML
+          if (parsed.html) {
+            const $ = cheerio.load(parsed.html);
+            $('table tr').each((_, row) => {
+              const cells = $(row).find('td');
+              if (cells.length >= 2) {
+                const key   = cells.eq(0).text().trim();  // ex: "Date/Time"
+                const value = cells.eq(1).text().trim();  // ex: "2025/05/14 13:45:40"
+                if (key) fields[key] = value;
               }
-            }
+            });
           }
-        }
-  
-        // 3. Se ainda não encontrou nada, tenta HTML (tabela)
-        if (Object.keys(fields).length === 0 && parsed.html) {
-          const cheerio = await import('cheerio');
-          const $ = cheerio.load(parsed.html);
-  
-          $('table tr').each((_, row) => {
-            const key = $(row).find('td').eq(0).text().trim();
-            const value = $(row).find('td').eq(1).text().trim();
-            if (key) fields[key] = value;
-          });
-        }
+          
+          // 2) Se não sobrou nada, tente o texto puro (allow ":" no valor)
+          if (Object.keys(fields).length === 0 && parsed.text) {
+            parsed.text
+              .split(/\r?\n/)
+              .map(l => l.trim())
+              .filter(Boolean)
+              .forEach(line => {
+                const [rawKey, ...rest] = line.split(':');
+                const val = rest.join(':').trim();
+                if (rawKey && val) fields[rawKey.trim()] = val;
+              });
+          }
   
         // ✂️ Limpeza do corpo para salvar no banco e exibir no Telegram
         const corpoTexto = (parsed.text || parsed.html || '')
@@ -179,7 +167,7 @@ export class EmailService {
         const dto: AlertDto = {
           time: dataHora,
           aviso: assunto,
-          dataHora: fields['Data/Hora'] || fields['Date/Time'] || fields['Date'] || '(sem data)',
+          dataHora: fields['Data/Hora'] || fields['Date/Time'] || fields['Date'] || fields['hora'] || '(sem data)',
           ip: fields['IP'] || '(sem IP)',
           nomeSistema: fields['Nome Sistema'] || fields['System Name'] || fields['Name'] || '(sem nome)',
           contato: fields['Contato Sistema'] || fields['System Contact'] || fields['Contact'] || '(sem contato)',
