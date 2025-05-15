@@ -36,9 +36,12 @@ export class EmailService {
   //   },
   // };
 
+  private escapeMarkdown(text: string): string {
+    return text.replace(/([_*[\]()~`>#+=|{}.!-])/g, '\\$1');
+  }
 
   private async enviarTelegramComOuSemCorpo(dto: AlertDto, id: string, chatId: string) {
-    const msgText = [
+    const msgText = this.escapeMarkdown([
       `⚠️ *Alerta de No-break*`,
       `🖥️ *Aviso:* ${dto.aviso}`,
       `⏰ *Data/Hora:* ${dto.dataHora}`,
@@ -46,7 +49,7 @@ export class EmailService {
       `📞 *Contato:* ${dto.contato}`,
       `📍 *Localidade:* ${dto.localidade}`,
       `❗️ *Status:* ${dto.status}`,
-    ].join('\n');
+    ].join('\n'));
   
     const payload = {
       chat_id: chatId,
@@ -56,7 +59,6 @@ export class EmailService {
         inline_keyboard: [[{ text: '📨 Ver corpo do e-mail', callback_data: `ver_corpo::${id}` }]],
       },
     };
-  
     this.logger.debug(`📤 Enviando mensagem para Telegram (chatId: ${chatId})`);
     this.logger.debug(`📦 Payload: ${JSON.stringify(payload, null, 2)}`);
   
