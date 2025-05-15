@@ -36,28 +36,28 @@ export class EmailService {
   //   },
   // };
 
-  private escapeMarkdown(text: string): string {
-    return text.replace(/([_*[\]()~`>#+=|{}.!-])/g, '\\$1');
-  }
+
 
   private async enviarTelegramComOuSemCorpo(dto: AlertDto, id: string, chatId: string) {
-    const msgText = this.escapeMarkdown([
-      `⚠️ Alerta de No-break`,
+    const msgText = [
+      '⚠️ Alerta de No-break',
       `🖥️ Aviso: ${dto.aviso}`,
       `⏰ Data/Hora: ${dto.dataHora}`,
       `🖥️ Sistema: ${dto.nomeSistema}`,
       `📞 Contato: ${dto.contato}`,
       `📍 Localidade: ${dto.localidade}`,
       `❗️ Status: ${dto.status}`,
-    ].join('\n'));
+    ].join('\n');
   
     const payload = {
       chat_id: chatId,
       text: msgText,
+      // ❌ NÃO INCLUA parse_mode
       reply_markup: {
         inline_keyboard: [[{ text: '📨 Ver corpo do e-mail', callback_data: `ver_corpo::${id}` }]],
       },
     };
+  
     this.logger.debug(`📤 Enviando mensagem para Telegram (chatId: ${chatId})`);
     this.logger.debug(`📦 Payload: ${JSON.stringify(payload, null, 2)}`);
   
@@ -71,7 +71,7 @@ export class EmailService {
       const data = await res.json();
   
       if (!res.ok) {
-        this.logger.error(`❌ Erro no envio para o Telegram: ${res.status} - ${res.statusText}`);
+        this.logger.error(`❌ Erro ao enviar para Telegram: ${res.status} - ${res.statusText}`);
         this.logger.error(`📨 Resposta do Telegram: ${JSON.stringify(data, null, 2)}`);
       } else {
         this.logger.log(`✅ Mensagem enviada ao Telegram com sucesso (chatId: ${chatId})`);
@@ -80,6 +80,7 @@ export class EmailService {
       this.logger.error(`💥 Exceção ao enviar mensagem para Telegram: ${err.message}`);
     }
   }
+  
   
 
   private async fetchAndProcess() {
