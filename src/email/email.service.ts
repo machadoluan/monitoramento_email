@@ -43,7 +43,8 @@ export class EmailService {
     const msgText = [
       '⚠️ Alerta de No-break',
       `🖥️ Aviso: ${dto.aviso}`,
-      `⏰ Data/Hora: ${dto.dataHora} - ${dto.hora}`,
+      `📅 Data: ${dto.data}`,
+      `⏰ Hora: ${dto.hora}`,
       `🖥️ Sistema: ${dto.nomeSistema}`,
       `📞 Contato: ${dto.contato}`,
       `📍 Localidade: ${dto.localidade}`,
@@ -98,6 +99,32 @@ export class EmailService {
     } catch (err) {
       this.logger.error(`💥 Exceção ao enviar mensagem para Telegram: ${err.message}`);
     }
+  }
+
+
+
+  private extrairDataHora(valor: string): { data: string, hora: string } {
+    let data = '';
+    let hora = '';
+  
+    if (valor.includes(' ')) {
+      const partes = valor.trim().split(' ');
+      if (partes.length >= 2) {
+        // Checa se a primeira parte é data
+        if (/\d{2}\/\d{2}\/\d{4}/.test(partes[0]) || /\d{4}\/\d{2}\/\d{2}/.test(partes[0])) {
+          data = partes[0];
+          hora = partes[1];
+        }
+      }
+    } else {
+      if (/\d{2}\/\d{2}\/\d{4}/.test(valor) || /\d{4}\/\d{2}\/\d{2}/.test(valor)) {
+        data = valor;
+      } else if (/\d{2}:\d{2}:\d{2}/.test(valor)) {
+        hora = valor;
+      }
+    }
+  
+    return { data, hora };
   }
   
   
@@ -182,19 +209,37 @@ export class EmailService {
         const U = (assunto + ' ' + corpoTexto).toUpperCase();
         const palavrasChave = await this.kw.getAll();
         const relevante = palavrasChave.some(k => U.includes(k));
+
+        const rawDataHora = fields['Data/Hora'] || fields['Date/Time'] || '';
+const rawData = fields['Date'] || '';
+const rawHora = fields['Time'] || fields['hora'] || '';
+
+const { data: data1, hora: hora1 } = this.extrairDataHora(rawDataHora);
+const { data: data2 } = this.extrairDataHora(rawData);
+const { hora: hora2 } = this.extrairDataHora(rawHora);
+
+const data = data1 || data2 || '(sem data)';
+const hora = hora1 || hora2 || '';
+
+const contatoRaw = fields['Contato Sistema'] || fields['System Contact'] || fields['Contact'] || '';
+const localidadeRaw = fields['Localidade Sistema'] || fields['System Location'] || fields['Location'] || '';
+
+
+const [contato, localidadeExtra] = contatoRaw.split(/System Location:/i);
+const localidade = localidadeExtra?.trim() || localidadeRaw;
   
-        const dto: AlertDto = {
-          time: dataHora,
-          aviso: assunto,
-          dataHora: fields['Data/Hora'] || fields['Date/Time'] || fields['Date'] || fields['hora'] || fields['Time'] || '(sem data)',
-          hora: fields['Time'] || '',
-          ip: fields['IP'] || '(sem IP)',
-          nomeSistema: fields['Nome Sistema'] || fields['System Name'] || fields['Name'] || '(sem nome)',
-          contato: fields['Contato Sistema'] || fields['System Contact'] || fields['Contact'] || '(sem contato)',
-          localidade: fields['Localidade Sistema'] || fields['System Location'] || fields['Location'] || '(sem localidade)',
-          status: fields['Status'] || fields['Code'] || '(sem status)',
-          mensagemOriginal: corpoTexto,
-        };
+const dto: AlertDto = {
+  time: `${data} ${hora}`.trim(),
+  aviso: assunto,
+  data: data,
+  hora: hora,
+  ip: fields['IP'] || '(sem IP)',
+  nomeSistema: fields['Nome Sistema'] || fields['System Name'] || fields['Name'] || '(sem nome)',
+  contato: contato?.trim() || '(sem contato)',
+  localidade: localidade || '(sem localidade)',
+  status: fields['Status'] || fields['Code'] || '(sem status)',
+  mensagemOriginal: corpoTexto,
+};
   
         if (relevante) {
           const saved = await this.alertService.create(dto);
