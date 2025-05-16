@@ -43,7 +43,7 @@ export class EmailService {
     const msgText = [
       '⚠️ Alerta de No-break',
       `🖥️ Aviso: ${dto.aviso}`,
-      `⏰ Data/Hora: ${dto.dataHora}`,
+      `⏰ Data/Hora: ${dto.dataHora} - ${dto.hora}`,
       `🖥️ Sistema: ${dto.nomeSistema}`,
       `📞 Contato: ${dto.contato}`,
       `📍 Localidade: ${dto.localidade}`,
@@ -187,6 +187,7 @@ export class EmailService {
           time: dataHora,
           aviso: assunto,
           dataHora: fields['Data/Hora'] || fields['Date/Time'] || fields['Date'] || fields['hora'] || fields['Time'] || '(sem data)',
+          hora: fields['Time'] || '',
           ip: fields['IP'] || '(sem IP)',
           nomeSistema: fields['Nome Sistema'] || fields['System Name'] || fields['Name'] || '(sem nome)',
           contato: fields['Contato Sistema'] || fields['System Contact'] || fields['Contact'] || '(sem contato)',
