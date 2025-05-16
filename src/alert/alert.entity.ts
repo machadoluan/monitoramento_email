@@ -8,8 +8,8 @@ export class AlertEntity {
 
     @Column() time: string;
     @Column() aviso: string;
-    @Column() data: string;
-    @Column() hora: string;
+    @Column({ nullable: true }) data: string;
+    @Column({ nullable: true }) hora: string;
     @Column() ip: string;
     @Column() nomeSistema: string;
     @Column() contato: string;
