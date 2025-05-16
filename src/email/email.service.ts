@@ -48,7 +48,6 @@ export class EmailService {
       `🖥️ Sistema: ${dto.nomeSistema}`,
       `📞 Contato: ${dto.contato}`,
       `📍 Localidade: ${dto.localidade}`,
-      `❗️ Status: ${dto.status}`,
     ].join('\n');
   
     // extrai só dígitos do contato
@@ -227,11 +226,10 @@ const localidadeRaw = fields['Localidade Sistema'] || fields['System Location'] 
 
 const [contato, localidadeExtra] = contatoRaw.split(/System Location:/i);
 const localidade = localidadeExtra?.trim() || localidadeRaw;
-  
 const dto: AlertDto = {
   time: `${data} ${hora}`.trim(),
   aviso: assunto,
-  data: data,
+  data: this.formatarDataParaBR(data),
   hora: hora,
   ip: fields['IP'] || '(sem IP)',
   nomeSistema: fields['Nome Sistema'] || fields['System Name'] || fields['Name'] || '(sem nome)',
@@ -278,4 +276,19 @@ const dto: AlertDto = {
       }),
     });
   }
+
+  private formatarDataParaBR(dataInput: string | Date): string {
+    const data = new Date(dataInput);
+  
+    // Verifica se a data é válida
+    if (isNaN(data.getTime())) return '(data inválida)';
+  
+    const dia = String(data.getDate()).padStart(2, '0');
+    const mes = String(data.getMonth() + 1).padStart(2, '0'); // mês é 0-indexado
+    const ano = data.getFullYear();
+  
+    return `${dia}/${mes}/${ano}`;
+  }
+
+
 }
