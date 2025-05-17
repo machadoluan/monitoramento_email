@@ -243,7 +243,7 @@ const dto: AlertDto = {
           const saved = await this.alertService.create(dto);
           await this.enviarTelegramComOuSemCorpo(dto, saved.id, reg.chatId);
           await this.notificarAlexa(dto.contato, dto.status);
-        } else {
+        } else if(assunto === 'Mensagem não entregue retornou ao remetente') {
           this.logger.log(`🗑️ Ignorado: ${assunto}`);
         }
       }
