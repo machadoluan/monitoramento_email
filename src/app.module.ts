@@ -14,6 +14,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AlertEntity } from './alert/alert.entity';
 import { Keyword } from './keyword/keyword.entity';
 import { EmailEntity } from './email/email.entity';
+import { BlockWord } from './keyword/blockword.entity';
+import { EmailBlockEntity } from './email/emailsBlock.entity';
 
 @Module({
   imports: [
@@ -26,7 +28,7 @@ import { EmailEntity } from './email/email.entity';
         username: configService.get<string>('DATABASE_USER'),
         password: 'Machado@Luan121107#',
         database: configService.get<string>('DATABASE_NAME'),
-        entities: [AlertEntity, Keyword, EmailEntity],
+        entities: [AlertEntity, Keyword, EmailEntity, BlockWord, EmailBlockEntity],
         autoLoadEntities: true,
         synchronize: true,
       }),
@@ -38,7 +40,7 @@ import { EmailEntity } from './email/email.entity';
     TelegramModule,
     KeywordModule,
     DebugModule,
-    AlertModule],
+    AlertModule,],
   controllers: [AppController, AuthController],
   providers: [AppService],
 })

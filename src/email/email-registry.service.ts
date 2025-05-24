@@ -4,14 +4,17 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { EmailEntity } from './email.entity';
 import { Repository } from 'typeorm';
 import { AddEmailDto } from './add-email.dto';
+import { EmailBlockEntity } from './emailsBlock.entity';
 
 @Injectable()
 export class EmailRegistryService {
 
-    constructor(
-        @InjectRepository(EmailEntity)
-        private readonly repo: Repository<EmailEntity>,
-    ) {}
+  constructor(
+    @InjectRepository(EmailEntity)
+    private readonly repo: Repository<EmailEntity>,
+    @InjectRepository(EmailBlockEntity)
+    private readonly repoBlock: Repository<EmailBlockEntity>,
+  ) { }
 
   async add(dto: AddEmailDto) {
     const existe = await this.repo.findOne({ where: { email: dto.email } });
@@ -26,6 +29,10 @@ export class EmailRegistryService {
     return this.repo.find();
   }
 
+  async listBlock(): Promise<EmailBlockEntity[]> {
+    return this.repoBlock.find();
+  }
+
   async findByChat(chatId: string): Promise<EmailEntity[]> {
     return this.repo.find({ where: { chatId } });
   }
@@ -37,7 +44,7 @@ export class EmailRegistryService {
     await this.repo.save(registro);
     return true;
   }
-  
+
   async updateChat(email: string, novoChatId: string): Promise<boolean> {
     const registro = await this.repo.findOne({ where: { email } });
     if (!registro) return false;
@@ -45,13 +52,28 @@ export class EmailRegistryService {
     await this.repo.save(registro);
     return true;
   }
-  
+
   async remove(email: string, chatId: string): Promise<boolean> {
     const existing = await this.repo.findOne({ where: { email, chatId } });
     if (!existing) return false;
     await this.repo.remove(existing);
     return true;
   }
-  
+
+  async block(email: string): Promise<boolean> {
+    const registro = await this.repoBlock.findOne({ where: { email } });
+    if (!registro) {
+      const novo = this.repoBlock.create({ email });
+      await this.repoBlock.save(novo);
+    }
+    return true;
+  }
+
+  async unblock(email: string): Promise<boolean> {
+    const registro = await this.repoBlock.findOne({ where: { email } });
+    if (!registro) return false;
+    await this.repoBlock.remove(registro);
+    return true;
+  }
 }
 

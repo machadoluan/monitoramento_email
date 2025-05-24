@@ -171,6 +171,64 @@ export class TelegramCommandService {
           }
           break;
 
+        case '/blockmail':
+          {
+            const [emailToBlock] = args;
+            if (!emailToBlock) {
+              resp = `❗ Uso: /blockmail <email>`;
+              break;
+            }
+            const blocked = await this.registry.block(emailToBlock);
+            resp = blocked
+              ? `✅ E-mail *${emailToBlock}* bloqueado com sucesso.`
+              : `⚠️ E-mail não encontrado.`;
+            break;
+          }
+
+        case '/unblockmail':
+          {
+            const [emailToUnblock] = args;
+            if (!emailToUnblock) {
+              resp = `❗ Uso: /unblockmail <email>`;
+              break;
+            }
+            const unblocked = await this.registry.unblock(emailToUnblock);
+            resp = unblocked
+              ? `✅ E-mail *${emailToUnblock}* desbloqueado com sucesso.`
+              : `⚠️ E-mail não encontrado.`;
+            break;
+          }
+        case '/blocktag':
+          {
+            const palavraOuFrase = args.join(' ').trim();
+            if (!palavraOuFrase) {
+              resp = `❗ Uso: /blocktag <palavra ou frase>`;
+              break;
+            }
+
+            const bloqueado = await this.kw.addBlock(palavraOuFrase);
+            resp = bloqueado
+              ? `✅ Tag '${palavraOuFrase.toUpperCase()}' bloqueada com sucesso.`
+              : `⚠️ A tag '${palavraOuFrase.toUpperCase()}' já está bloqueada.`;
+          }
+          break;
+
+
+        case '/unblocktag':
+          {
+            const [wordToUnblock] = args;
+            if (!wordToUnblock) {
+              resp = `❗ Uso: /unblocktag <palavra>`;
+              break;
+            }
+            try {
+              await this.kw.removeBlock(wordToUnblock);
+              resp = `✅ Palavra '${wordToUnblock.toUpperCase()}' desbloqueada com sucesso.`;
+            } catch {
+              resp = `⚠️ Não encontrei a palavra '${wordToUnblock.toUpperCase()}' para desbloquear.`;
+            }
+          }
+          break;
 
         default:
           resp =
@@ -180,12 +238,17 @@ export class TelegramCommandService {
             `➕ /addtag <palavra> — adicionar palavra-chave\n` +
             `➖ /removetag <palavra> — remover palavra-chave\n` +
             `📃 /vertags — listar palavras-chave\n\n` +
+            `📃 /blockwords — listar palavras-chave bloqueadas\n\n` +
+            `📃 /blocktag — <palavra> — bloquear palavra-chave\n\n` +
+            `📃 /unblocktag — <palavra> — desbloquear palavra-chave\n\n` +
 
             `📬 *E-mails monitorados:*\n` +
             `📥 /addemail <email> <senha> <chatId> — adicionar e-mail\n` +
             `📜 /listemails — listar e-mails cadastrados\n` +
             `🗑️ /removeemail <email> — remover e-mail\n` +
             `🔐 /editsenha <email> <novasenha> — alterar senha\n` +
+            `🔐 /blockmail <email> — bloquear e-mail\n` +
+            `🔐 /unblockmail <email> — desbloquear e-mail\n` +
             `📲 /setgrupo <email> <chatId> — mudar grupo destino dos alertas`;
 
       }

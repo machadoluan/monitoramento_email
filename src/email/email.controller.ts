@@ -50,4 +50,10 @@ export class EmailController {
     return { success: true };
   }
 
+
+  @Get('listblock')
+  async listBlock() {
+    return this.registry.listBlock();
+  }
+
 }

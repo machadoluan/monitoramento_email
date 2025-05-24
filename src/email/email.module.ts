@@ -10,16 +10,17 @@ import { KeywordModule } from 'src/keyword/keyword.module';
 import { AlertModule }   from 'src/alert/alert.module';
 import { EmailRegistryService } from './email-registry.service';
 import { EmailEntity } from './email.entity';
+import { EmailBlockEntity } from './emailsBlock.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([AlertEntity, EmailEntity]),  // pra AlertService injetar repo
-    KeywordModule,                            // ← fornece KeywordService
-    AlertModule,                              // ← fornece AlertService
+    TypeOrmModule.forFeature([AlertEntity, EmailEntity, EmailBlockEntity]),  
+    KeywordModule,                          
+    AlertModule,                     
   ],
   providers: [
     EmailService,
-    EmailRegistryService
+    EmailRegistryService,
   ],
   controllers: [EmailController],
   exports: [EmailService, EmailRegistryService],
