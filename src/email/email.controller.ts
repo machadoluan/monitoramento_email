@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, NotFoundException, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpStatus, HttpCode, NotFoundException, Param, Post, Put } from '@nestjs/common';
 import { EmailService } from './email.service';
 import { AddEmailDto } from './add-email.dto';
 import { EmailRegistryService } from './email-registry.service';
@@ -6,12 +6,6 @@ import { EmailRegistryService } from './email-registry.service';
 @Controller('email')
 export class EmailController {
   constructor(private readonly emailService: EmailService, private readonly registry: EmailRegistryService) { }
-
-  // @Get('ler')
-  // async ler() {
-  //   await this.emailService.fetchAndProcess();
-  //   return { status: 'ok' };
-  // }
 
   @Post('addemail')
   async addEmail(@Body() dto: AddEmailDto) {
@@ -44,8 +38,8 @@ export class EmailController {
   }
 
   @Delete(':email')
-  async removeEmail(@Param('email') email: string, @Body('chatId') chatId: string,) {
-    const removed = await this.registry.remove(email, chatId);
+  async removeEmail(@Param('email') email: string) {
+    const removed = await this.registry.remove(email);
     if (!removed) throw new NotFoundException('E-mail não encontrado');
     return { success: true };
   }
@@ -55,5 +49,24 @@ export class EmailController {
   async listBlock() {
     return this.registry.listBlock();
   }
+
+  @Get('list')
+  async list() {
+    return this.registry.list();
+  }
+
+  @Post('block')
+  @HttpCode(HttpStatus.CREATED)
+  addBlock(@Body('email') email: string) {
+    return this.registry.block(email).then(added => ({ added }));
+  }
+
+  @Delete('block/:email')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removeBlock(@Param('email') email: string) {
+    return this.registry.unblock(email);
+  }
+
+
 
 }

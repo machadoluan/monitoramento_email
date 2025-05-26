@@ -136,7 +136,7 @@ export class TelegramCommandService {
               resp = `❗ Uso: /removeemail <email>`;
               break;
             }
-            const deleted = await this.registry.remove(emailToRemove, chatId.toString());
+            const deleted = await this.registry.remove(emailToRemove);
             resp = deleted
               ? `🗑️ E-mail *${emailToRemove}* removido com sucesso.`
               : `⚠️ Não encontrei o e-mail ou ele não pertence a este chat.`;

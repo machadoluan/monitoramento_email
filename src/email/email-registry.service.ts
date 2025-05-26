@@ -25,8 +25,15 @@ export class EmailRegistryService {
     return { success: true };
   }
 
-  async list(): Promise<EmailEntity[]> {
-    return this.repo.find();
+  async list(): Promise<any[]> {
+    const registros = await this.repo.find();
+
+    const result = registros.map(registro => ({
+      email: registro.email,
+      chatId: registro.chatId,
+    }));
+
+    return result;
   }
 
   async listBlock(): Promise<EmailBlockEntity[]> {
@@ -53,8 +60,8 @@ export class EmailRegistryService {
     return true;
   }
 
-  async remove(email: string, chatId: string): Promise<boolean> {
-    const existing = await this.repo.findOne({ where: { email, chatId } });
+  async remove(email: string): Promise<boolean> {
+    const existing = await this.repo.findOne({ where: { email } });
     if (!existing) return false;
     await this.repo.remove(existing);
     return true;
