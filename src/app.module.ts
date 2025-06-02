@@ -1,3 +1,4 @@
+
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -16,6 +17,9 @@ import { Keyword } from './keyword/keyword.entity';
 import { EmailEntity } from './email/email.entity';
 import { BlockWord } from './keyword/blockword.entity';
 import { EmailBlockEntity } from './email/emailsBlock.entity';
+import { ContratosModule } from './contratos/contratos.module';
+import { WhatsappService } from './whatsapp/whatsapp.service';
+import { WhatsappModule } from './whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -40,8 +44,11 @@ import { EmailBlockEntity } from './email/emailsBlock.entity';
     TelegramModule,
     KeywordModule,
     DebugModule,
-    AlertModule,],
+    AlertModule,
+    ContratosModule,
+    WhatsappModule,
+  ],
   controllers: [AppController, AuthController],
-  providers: [AppService],
+  providers: [ AppService, WhatsappService],
 })
 export class AppModule { }

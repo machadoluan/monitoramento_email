@@ -11,6 +11,9 @@ import { AlertService } from 'src/alert/alert.service';
 import { AlertDto } from 'src/alert/dto/alert.dto';
 import { EmailRegistryService } from './email-registry.service';
 import * as cheerio from 'cheerio';
+import { WhatsappService } from 'src/whatsapp/whatsapp.service';
+import { ContratosService } from 'src/contratos/contratos.service';
+
 dotenv.config();
 
 @Injectable()
@@ -19,7 +22,9 @@ export class EmailService {
   constructor(
     private readonly kw: KeywordService,
     private readonly alertService: AlertService,
-    private readonly emailRegistryService: EmailRegistryService
+    private readonly emailRegistryService: EmailRegistryService,
+    private readonly whatsappService: WhatsappService,
+    private readonly contratosService: ContratosService
   ) { }
 
   private processing = false;
@@ -36,6 +41,20 @@ export class EmailService {
   //   },
   // };
 
+
+  private async enviarWhatsapp(telefone: string, dto: AlertDto) {
+    const msgText = [
+      '⚠️ Alerta de No-break',
+      `🖥️ Aviso: ${dto.aviso}`,
+      `📅 Data: ${dto.data}`,
+      `⏰ Hora: ${dto.hora}`,
+      `🖥️ Sistema: ${dto.nomeSistema}`,
+      `📞 Contato: ${dto.contato}`,
+      `📍 Localidade: ${dto.localidade}`,
+    ].join('\n');
+
+    await this.whatsappService.sendMessage(telefone, msgText);
+  }
 
 
   private async enviarTelegramComOuSemCorpo(dto: AlertDto, id: string, chatId: string) {
@@ -131,7 +150,6 @@ export class EmailService {
   private async fetchAndProcess() {
     const registros = await this.emailRegistryService.list();
     const registrosBlock = await this.emailRegistryService.listBlock();
-
 
     for (const reg of registros) {
       const host = reg.email.includes('@gmail.com')
@@ -259,7 +277,42 @@ export class EmailService {
           this.logger.log(`📭 Ignorado: e-mail de erro de entrega`);
           continue;
         }
-        
+
+        const contatoNumerico = dto.contato.replace(/\D/g, '');
+
+        const cliente = await this.contratosService.findForNumber(contatoNumerico);
+
+        console.log(cliente)
+
+        if (cliente) {
+          let tagsParaChecar: string[] = [];
+
+          try {
+            const tagsCliente: string[] = JSON.parse(cliente.tags || '[]');
+
+            if (tagsCliente.length === 0) {
+              // usa tags globais
+              tagsParaChecar = (await this.kw.getAll()).map(tag => tag.toUpperCase());
+              this.logger.log(`📌 Cliente ${cliente.nome} sem tags personalizadas, usando tags globais`);
+            } else {
+              // usa somente as tags do cliente
+              tagsParaChecar = tagsCliente.map(tag => tag.toUpperCase());
+              this.logger.log(`📌 Cliente ${cliente.nome} com tags personalizadas: ${tagsCliente.join(', ')}`);
+            }
+
+            const tagsEncontradas = tagsParaChecar.filter(tag => U.includes(tag));
+
+            if (tagsEncontradas.length > 0) {
+              await this.whatsappService.sendMessage(contatoNumerico, `Alerta de no-break: ${dto.aviso}`);
+              this.logger.log(`✅ Alerta enviado para ${cliente.nome} (tags: ${tagsEncontradas.join(', ')})`);
+            } else {
+              this.logger.log(`❌ Cliente ${cliente.nome} ignorado - nenhuma tag correspondente no e-mail`);
+            }
+          } catch (error) {
+            this.logger.error(`Erro ao processar tags do cliente ${cliente.nome}: ${error.message}`);
+          }
+        }
+
 
         if (relevante) {
           const saved = await this.alertService.create(dto);
@@ -299,6 +352,4 @@ export class EmailService {
 
     return `${dia}/${mes}/${ano}`;
   }
-
-
 }

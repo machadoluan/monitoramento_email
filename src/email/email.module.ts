@@ -11,12 +11,15 @@ import { AlertModule }   from 'src/alert/alert.module';
 import { EmailRegistryService } from './email-registry.service';
 import { EmailEntity } from './email.entity';
 import { EmailBlockEntity } from './emailsBlock.entity';
+import { ContratosService } from 'src/contratos/contratos.service';
+import { ContratosModule } from 'src/contratos/contratos.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([AlertEntity, EmailEntity, EmailBlockEntity]),  
     KeywordModule,                          
-    AlertModule,                     
+    AlertModule,   
+    ContratosModule
   ],
   providers: [
     EmailService,

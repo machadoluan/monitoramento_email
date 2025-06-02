@@ -31,6 +31,7 @@ export class EmailRegistryService {
     const result = registros.map(registro => ({
       email: registro.email,
       chatId: registro.chatId,
+      senha: registro.senha,
     }));
 
     return result;
